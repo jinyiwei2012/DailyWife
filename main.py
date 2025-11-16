@@ -857,10 +857,15 @@ class DailyWifePlugin(Star):
         if not self._is_advanced_enabled(group_id):
             yield event.plain_result("❌ 进阶功能未开启，该群无法使用许愿功能。")
             return
+
+        # 确保使用最新的数据
+        self._check_reset(group_id)
+
         parts = event.message_str.split()
         if len(parts) < 2:
             yield event.plain_result("❌ 参数错误：请指定许愿对象。")
             return
+
         target_qq = next(
             (
                 str(seg.qq)
@@ -881,8 +886,7 @@ class DailyWifePlugin(Star):
             yield event.plain_result("❌ 今日许愿次数已用完。")
             return
 
-        if group_id not in self.pair_data:
-            self.pair_data[group_id] = {"date": datetime.now().strftime("%Y-%m-%d"), "pairs": {}, "used": []}
+        # 使用最新的群组数据
         group_data = self.pair_data[group_id]
 
         if user_id in group_data["pairs"]:
@@ -894,7 +898,7 @@ class DailyWifePlugin(Star):
             yield event.plain_result("❌ 许愿失败：目标在黑名单或被对方拒绝，无法许愿到该用户。")
             return
 
-        # 多端口尝试（原逻辑）
+        # 多端口尝试
         last_error = None
         for attempt in range(len(self.napcat_hosts)):
             current_host = self._get_current_napcat_host()
@@ -922,18 +926,29 @@ class DailyWifePlugin(Star):
                         elif response_data.get("status") == "ok" and "data" in response_data:
                             target_nickname = response_data["data"].get("nickname", f"未知用户({target_qq})")
                             sender_nickname = event.get_sender_name()
-                            group_data["pairs"][user_id] = {"user_id": target_qq,
-                                                            "display_name": f"{target_nickname}({target_qq})"}
-                            group_data["pairs"][target_qq] = {"user_id": user_id,
-                                                              "display_name": f"{sender_nickname}({user_id})"}
+
+                            # 直接更新 pair_data 中的群组数据
+                            group_data["pairs"][user_id] = {
+                                "user_id": target_qq,
+                                "display_name": f"{target_nickname}({target_qq})"
+                            }
+                            group_data["pairs"][target_qq] = {
+                                "user_id": user_id,
+                                "display_name": f"{sender_nickname}({user_id})"
+                            }
+
                             if user_id not in group_data["used"]:
                                 group_data["used"].append(user_id)
                             if target_qq not in group_data["used"]:
                                 group_data["used"].append(target_qq)
+
+                            # 确保保存配对数据
                             self._save_pair_data()
+
                             partner_info = group_data["pairs"][user_id]
                             formatted_info = self._format_display_info(partner_info['display_name'])
                             self.advanced_usage[group_id][user_id]["wish"] += 1
+
                             message_elements = [
                                 Plain(f"💖 许愿成功,系统已为您指定：{formatted_info}作为伴侣\n(请好好对待TA)")]
 
@@ -995,6 +1010,10 @@ class DailyWifePlugin(Star):
         if not self._is_advanced_enabled(group_id):
             yield event.plain_result("❌ 进阶功能未开启，该群无法使用强娶功能。")
             return
+
+        # 确保使用最新的数据
+        self._check_reset(group_id)
+
         parts = event.message_str.split()
         if len(parts) < 2:
             yield event.plain_result("❌ 参数错误：请指定强娶对象（仅支持命令+QQ号）。")
@@ -1028,8 +1047,7 @@ class DailyWifePlugin(Star):
             yield event.plain_result("❌ 今日强娶次数已用完。")
             return
 
-        if group_id not in self.pair_data:
-            self.pair_data[group_id] = {"date": datetime.now().strftime("%Y-%m-%d"), "pairs": {}, "used": []}
+        # 使用最新的群组数据
         group_data = self.pair_data[group_id]
 
         if user_id in group_data["pairs"]:
@@ -1088,15 +1106,23 @@ class DailyWifePlugin(Star):
                                     del group_data["pairs"][original_partner_id]
 
                             sender_nickname = event.get_sender_name()
-                            group_data["pairs"][user_id] = {"user_id": target_qq,
-                                                            "display_name": f"{target_nickname}({target_qq})"}
-                            group_data["pairs"][target_qq] = {"user_id": user_id,
-                                                              "display_name": f"{sender_nickname}({user_id})"}
+                            group_data["pairs"][user_id] = {
+                                "user_id": target_qq,
+                                "display_name": f"{target_nickname}({target_qq})"
+                            }
+                            group_data["pairs"][target_qq] = {
+                                "user_id": user_id,
+                                "display_name": f"{sender_nickname}({user_id})"
+                            }
+
                             if user_id not in group_data["used"]:
                                 group_data["used"].append(user_id)
                             if target_qq not in group_data["used"]:
                                 group_data["used"].append(target_qq)
+
+                            # 确保保存配对数据
                             self._save_pair_data()
+
                             self.advanced_usage[group_id][user_id]["rob"] += 1
                             partner_info = group_data["pairs"][user_id]
                             formatted_info = self._format_display_info(partner_info['display_name'])
